@@ -163,7 +163,7 @@ The demo JSON file (e.g., `demo-architecture.json`) follows this structure:
     }
   ]
 }
-
+```
 All nodes (pods, databases, transports, proxies) are uniquely referenced by their id.
 
 The edges array defines directed connections. connections provides human-readable labels for the pop-up copy list.
