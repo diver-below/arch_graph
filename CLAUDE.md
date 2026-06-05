@@ -213,3 +213,696 @@ The file format will be JSON. The agent is free to transform it internally.
 - Clicking a connection highlights its endpoints and itself; pop‑up shows details.
 - The application runs locally by simply opening index.html or via a local HTTP server.
 - The systemd user unit successfully serves the application on the VM.
+
+## JSON Schema defining the data structure
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "System Architecture Graph Data",
+  "description": "Schema for the graph data containing zones, systems, namespaces, nodes, connections, and optional groups.",
+  "type": "object",
+  "required": ["zones", "systems", "namespaces", "nodes", "connections"],
+  "properties": {
+    "zones": {
+      "type": "array",
+      "description": "Network zones, e.g. our zone, external zone.",
+      "items": { "$ref": "#/definitions/zone" }
+    },
+    "systems": {
+      "type": "array",
+      "description": "Systems belonging to zones.",
+      "items": { "$ref": "#/definitions/system" }
+    },
+    "namespaces": {
+      "type": "array",
+      "description": "Namespaces inside systems (optional grouping).",
+      "items": { "$ref": "#/definitions/namespace" }
+    },
+    "nodes": {
+      "type": "array",
+      "description": "All graph nodes (modules, databases, transports, proxies).",
+      "items": { "$ref": "#/definitions/node" }
+    },
+    "connections": {
+      "type": "array",
+      "description": "Directed/undirected connections between nodes.",
+      "items": { "$ref": "#/definitions/connection" }
+    },
+    "groups": {
+      "type": "array",
+      "description": "Optional visual groupings of nodes (e.g. all get modules together).",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "nodeIds"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "nodeIds": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "zone": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "gridBounds": {
+          "type": "object",
+          "description": "Optional bounding box in grid coordinates (top-left and bottom-right).",
+          "properties": {
+            "x1": { "type": "integer", "minimum": 0 },
+            "y1": { "type": "integer", "minimum": 0 },
+            "x2": { "type": "integer", "minimum": 0 },
+            "y2": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "color": { "type": "string", "description": "CSS background color for zone visualization." }
+      }
+    },
+    "system": {
+      "type": "object",
+      "required": ["id", "name", "zoneId"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "zoneId": { "type": "string" },
+        "gridBounds": {
+          "type": "object",
+          "properties": {
+            "x1": { "type": "integer" },
+            "y1": { "type": "integer" },
+            "x2": { "type": "integer" },
+            "y2": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "namespace": {
+      "type": "object",
+      "required": ["id", "name", "systemId", "zoneId"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "systemId": { "type": "string" },
+        "zoneId": { "type": "string" },
+        "gridBounds": {
+          "type": "object",
+          "properties": {
+            "x1": { "type": "integer" },
+            "y1": { "type": "integer" },
+            "x2": { "type": "integer" },
+            "y2": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": ["id", "name", "type", "parentId", "gridX", "gridY"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["get", "syncer", "put", "bps", "rsc-core", "ui", "db", "transport", "proxy"]
+        },
+        "subtype": {
+          "type": "string",
+          "description": "Subtype for rsc-core (write, read, monitor) or ui (proxy, front, back). Optional.",
+          "enum": ["write", "read", "monitor", "proxy", "front", "back", "postgres", "ignite", "kafka", "zookeeper", "gateway", "load_balancer"]
+        },
+        "parentId": {
+          "type": "string",
+          "description": "ID of the parent namespace, system, or zone."
+        },
+        "gridX": { "type": "integer", "description": "Grid column (0-based)." },
+        "gridY": { "type": "integer", "description": "Grid row (0-based)." },
+        "description": { "type": "string" },
+        "metadata": {
+          "type": "object",
+          "description": "Additional key-value pairs (e.g. version, replicas)."
+        }
+      }
+    },
+    "connection": {
+      "type": "object",
+      "required": ["id", "sourceNodeId", "targetNodeId", "type"],
+      "properties": {
+        "id": { "type": "string" },
+        "sourceNodeId": { "type": "string" },
+        "targetNodeId": { "type": "string" },
+        "type": {
+          "type": "string",
+          "description": "Protocol or communication type (e.g. HTTP, Kafka, DB query)."
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["directed", "bidirectional"],
+          "default": "directed"
+        },
+        "label": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    }
+  }
+}
+```
+
+## a concrete example that complies with the schema
+```json
+{
+  "zones": [
+    {
+      "id": "zone-our",
+      "name": "Our System Zone",
+      "gridBounds": { "x1": 0, "y1": 0, "x2": 8, "y2": 7 },
+      "color": "#e8f5e9"
+    },
+    {
+      "id": "zone-ext",
+      "name": "External Zone",
+      "gridBounds": { "x1": 9, "y1": 0, "x2": 12, "y2": 7 },
+      "color": "#fce4ec"
+    }
+  ],
+  "systems": [
+    {
+      "id": "sys-main",
+      "name": "Main Processing System",
+      "zoneId": "zone-our",
+      "gridBounds": { "x1": 0, "y1": 0, "x2": 3, "y2": 7 }
+    },
+    {
+      "id": "sys-integration",
+      "name": "Integration System",
+      "zoneId": "zone-our",
+      "gridBounds": { "x1": 4, "y1": 0, "x2": 8, "y2": 7 }
+    },
+    {
+      "id": "sys-ext-master",
+      "name": "External Master System",
+      "zoneId": "zone-ext",
+      "gridBounds": { "x1": 9, "y1": 0, "x2": 12, "y2": 7 }
+    }
+  ],
+  "namespaces": [
+    {
+      "id": "ns-core",
+      "name": "core-ns",
+      "systemId": "sys-main",
+      "zoneId": "zone-our",
+      "gridBounds": { "x1": 0, "y1": 1, "x2": 3, "y2": 4 }
+    },
+    {
+      "id": "ns-integration",
+      "name": "integration-ns",
+      "systemId": "sys-integration",
+      "zoneId": "zone-our",
+      "gridBounds": { "x1": 4, "y1": 1, "x2": 8, "y2": 4 }
+    },
+    {
+      "id": "ns-ext",
+      "name": "external-ns",
+      "systemId": "sys-ext-master",
+      "zoneId": "zone-ext",
+      "gridBounds": { "x1": 9, "y1": 1, "x2": 12, "y2": 4 }
+    }
+  ],
+  "nodes": [
+    {
+      "id": "get-1",
+      "name": "GET Ingestor",
+      "type": "get",
+      "parentId": "ns-core",
+      "gridX": 0,
+      "gridY": 1,
+      "description": "Receives external requests, calls syncer and rsc-core."
+    },
+    {
+      "id": "get-2",
+      "name": "GET Adapter",
+      "type": "get",
+      "parentId": "ns-integration",
+      "gridX": 4,
+      "gridY": 1,
+      "description": "Handles requests from external master-system."
+    },
+    {
+      "id": "syncer-1",
+      "name": "Syncer Hub",
+      "type": "syncer",
+      "parentId": "ns-core",
+      "gridX": 1,
+      "gridY": 2,
+      "description": "Receives from get, calls external master-systems, DB, Kafka."
+    },
+    {
+      "id": "syncer-2",
+      "name": "Syncer Bridge",
+      "type": "syncer",
+      "parentId": "ns-integration",
+      "gridX": 5,
+      "gridY": 2,
+      "description": "Connects internal get to external systems and transport."
+    },
+    {
+      "id": "put-1",
+      "name": "PUT Dispatcher",
+      "type": "put",
+      "parentId": "ns-core",
+      "gridX": 2,
+      "gridY": 1,
+      "description": "Writes to external Kafka and triggers bps/syncer."
+    },
+    {
+      "id": "bps-1",
+      "name": "BPS Engine",
+      "type": "bps",
+      "parentId": "ns-core",
+      "gridX": 2,
+      "gridY": 3,
+      "description": "Works with DB, Kafka, external DB-orchestrator, Zookeeper."
+    },
+    {
+      "id": "rsc-write-1",
+      "name": "RSC Writer",
+      "type": "rsc-core",
+      "subtype": "write",
+      "parentId": "ns-core",
+      "gridX": 0,
+      "gridY": 3,
+      "description": "Reads from our Kafka, writes to DB."
+    },
+    {
+      "id": "rsc-read-1",
+      "name": "RSC Reader",
+      "type": "rsc-core",
+      "subtype": "read",
+      "parentId": "ns-core",
+      "gridX": 1,
+      "gridY": 4,
+      "description": "Reads from DB on demand."
+    },
+    {
+      "id": "rsc-monitor-1",
+      "name": "RSC Monitor",
+      "type": "rsc-core",
+      "subtype": "monitor",
+      "parentId": "ns-integration",
+      "gridX": 6,
+      "gridY": 3,
+      "description": "Monitors rsc-write, interacts with Zookeeper, answers get queries."
+    },
+    {
+      "id": "ui-proxy-1",
+      "name": "UI Proxy",
+      "type": "ui",
+      "subtype": "proxy",
+      "parentId": "ns-integration",
+      "gridX": 7,
+      "gridY": 1,
+      "description": "Connects to external auth, redirects to ui-front."
+    },
+    {
+      "id": "ui-front-1",
+      "name": "UI Frontend",
+      "type": "ui",
+      "subtype": "front",
+      "parentId": "ns-integration",
+      "gridX": 7,
+      "gridY": 2,
+      "description": "Static forms, receives from proxy, calls ui-back."
+    },
+    {
+      "id": "ui-back-1",
+      "name": "UI Backend",
+      "type": "ui",
+      "subtype": "back",
+      "parentId": "ns-integration",
+      "gridX": 7,
+      "gridY": 3,
+      "description": "Receives from front, writes to Kafka, reads/writes DBs."
+    },
+    {
+      "id": "db-pg-main",
+      "name": "PostgreSQL Main",
+      "type": "db",
+      "subtype": "postgres",
+      "parentId": "sys-main",
+      "gridX": 1,
+      "gridY": 6,
+      "description": "Slow but reliable relational store."
+    },
+    {
+      "id": "db-ignite-cache",
+      "name": "Ignite Cache",
+      "type": "db",
+      "subtype": "ignite",
+      "parentId": "sys-main",
+      "gridX": 2,
+      "gridY": 6,
+      "description": "Fast in-memory data grid."
+    },
+    {
+      "id": "transport-kafka",
+      "name": "Kafka Cluster",
+      "type": "transport",
+      "subtype": "kafka",
+      "parentId": "sys-integration",
+      "gridX": 5,
+      "gridY": 5,
+      "description": "Internal message bus."
+    },
+    {
+      "id": "transport-zk",
+      "name": "Zookeeper Ensemble",
+      "type": "transport",
+      "subtype": "zookeeper",
+      "parentId": "sys-integration",
+      "gridX": 6,
+      "gridY": 5,
+      "description": "Coordination and configuration."
+    },
+    {
+      "id": "proxy-gw",
+      "name": "API Gateway",
+      "type": "proxy",
+      "subtype": "gateway",
+      "parentId": "zone-our",
+      "gridX": 0,
+      "gridY": 0,
+      "description": "Entry point for external traffic into our zone."
+    },
+    {
+      "id": "proxy-lb",
+      "name": "Load Balancer",
+      "type": "proxy",
+      "subtype": "load_balancer",
+      "parentId": "zone-our",
+      "gridX": 4,
+      "gridY": 0,
+      "description": "Distributes internal traffic."
+    },
+    {
+      "id": "ext-master",
+      "name": "External Master",
+      "type": "get",
+      "subtype": null,
+      "parentId": "ns-ext",
+      "gridX": 10,
+      "gridY": 2,
+      "description": "External system that sends commands."
+    },
+    {
+      "id": "ext-db-orch",
+      "name": "External DB Orchestrator",
+      "type": "bps",
+      "subtype": null,
+      "parentId": "ns-ext",
+      "gridX": 10,
+      "gridY": 4,
+      "description": "Manages external database schemas."
+    },
+    {
+      "id": "ext-auth",
+      "name": "External Auth",
+      "type": "proxy",
+      "subtype": "gateway",
+      "parentId": "ns-ext",
+      "gridX": 11,
+      "gridY": 2,
+      "description": "External authentication service."
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "proxy-gw",
+      "targetNodeId": "get-1",
+      "type": "HTTP",
+      "direction": "directed",
+      "label": "API request"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "proxy-gw",
+      "targetNodeId": "get-2",
+      "type": "HTTP",
+      "direction": "directed",
+      "label": "API request"
+    },
+    {
+      "id": "c3",
+      "sourceNodeId": "get-1",
+      "targetNodeId": "syncer-1",
+      "type": "gRPC",
+      "direction": "directed",
+      "label": "Process request"
+    },
+    {
+      "id": "c4",
+      "sourceNodeId": "get-1",
+      "targetNodeId": "rsc-read-1",
+      "type": "gRPC",
+      "direction": "directed",
+      "label": "Read data"
+    },
+    {
+      "id": "c5",
+      "sourceNodeId": "get-2",
+      "targetNodeId": "ext-master",
+      "type": "HTTP",
+      "direction": "directed",
+      "label": "Fetch external status"
+    },
+    {
+      "id": "c6",
+      "sourceNodeId": "get-2",
+      "targetNodeId": "syncer-2",
+      "type": "gRPC",
+      "direction": "directed"
+    },
+    {
+      "id": "c7",
+      "sourceNodeId": "syncer-1",
+      "targetNodeId": "transport-kafka",
+      "type": "Kafka",
+      "direction": "bidirectional",
+      "label": "read/write topics"
+    },
+    {
+      "id": "c8",
+      "sourceNodeId": "syncer-1",
+      "targetNodeId": "db-pg-main",
+      "type": "SQL",
+      "direction": "directed",
+      "label": "query"
+    },
+    {
+      "id": "c9",
+      "sourceNodeId": "syncer-2",
+      "targetNodeId": "ext-master",
+      "type": "HTTP",
+      "direction": "directed"
+    },
+    {
+      "id": "c10",
+      "sourceNodeId": "put-1",
+      "targetNodeId": "ext-master",
+      "type": "Kafka",
+      "direction": "directed",
+      "label": "write external topic"
+    },
+    {
+      "id": "c11",
+      "sourceNodeId": "put-1",
+      "targetNodeId": "syncer-1",
+      "type": "gRPC",
+      "direction": "directed"
+    },
+    {
+      "id": "c12",
+      "sourceNodeId": "put-1",
+      "targetNodeId": "bps-1",
+      "type": "gRPC",
+      "direction": "directed"
+    },
+    {
+      "id": "c13",
+      "sourceNodeId": "bps-1",
+      "targetNodeId": "db-pg-main",
+      "type": "SQL",
+      "direction": "bidirectional",
+      "label": "read/write"
+    },
+    {
+      "id": "c14",
+      "sourceNodeId": "bps-1",
+      "targetNodeId": "transport-kafka",
+      "type": "Kafka",
+      "direction": "directed",
+      "label": "write"
+    },
+    {
+      "id": "c15",
+      "sourceNodeId": "bps-1",
+      "targetNodeId": "transport-zk",
+      "type": "Zookeeper",
+      "direction": "bidirectional",
+      "label": "schema/config"
+    },
+    {
+      "id": "c16",
+      "sourceNodeId": "bps-1",
+      "targetNodeId": "ext-db-orch",
+      "type": "HTTP",
+      "direction": "directed"
+    },
+    {
+      "id": "c17",
+      "sourceNodeId": "rsc-write-1",
+      "targetNodeId": "transport-kafka",
+      "type": "Kafka",
+      "direction": "directed",
+      "label": "read"
+    },
+    {
+      "id": "c18",
+      "sourceNodeId": "rsc-write-1",
+      "targetNodeId": "db-pg-main",
+      "type": "SQL",
+      "direction": "directed",
+      "label": "write"
+    },
+    {
+      "id": "c19",
+      "sourceNodeId": "rsc-write-1",
+      "targetNodeId": "db-ignite-cache",
+      "type": "SQL",
+      "direction": "directed",
+      "label": "write"
+    },
+    {
+      "id": "c20",
+      "sourceNodeId": "rsc-read-1",
+      "targetNodeId": "db-pg-main",
+      "type": "SQL",
+      "direction": "directed",
+      "label": "read"
+    },
+    {
+      "id": "c21",
+      "sourceNodeId": "rsc-read-1",
+      "targetNodeId": "db-ignite-cache",
+      "type": "SQL",
+      "direction": "directed",
+      "label": "read"
+    },
+    {
+      "id": "c22",
+      "sourceNodeId": "rsc-monitor-1",
+      "targetNodeId": "rsc-write-1",
+      "type": "gRPC",
+      "direction": "directed",
+      "label": "health check"
+    },
+    {
+      "id": "c23",
+      "sourceNodeId": "rsc-monitor-1",
+      "targetNodeId": "transport-zk",
+      "type": "Zookeeper",
+      "direction": "bidirectional"
+    },
+    {
+      "id": "c24",
+      "sourceNodeId": "get-1",
+      "targetNodeId": "rsc-monitor-1",
+      "type": "gRPC",
+      "direction": "directed"
+    },
+    {
+      "id": "c25",
+      "sourceNodeId": "ui-proxy-1",
+      "targetNodeId": "ext-auth",
+      "type": "HTTP",
+      "direction": "directed",
+      "label": "authenticate"
+    },
+    {
+      "id": "c26",
+      "sourceNodeId": "ui-proxy-1",
+      "targetNodeId": "ui-front-1",
+      "type": "HTTP",
+      "direction": "directed",
+      "label": "redirect"
+    },
+    {
+      "id": "c27",
+      "sourceNodeId": "ui-front-1",
+      "targetNodeId": "ui-back-1",
+      "type": "HTTP",
+      "direction": "directed",
+      "label": "API call"
+    },
+    {
+      "id": "c28",
+      "sourceNodeId": "ui-back-1",
+      "targetNodeId": "transport-kafka",
+      "type": "Kafka",
+      "direction": "directed",
+      "label": "write"
+    },
+    {
+      "id": "c29",
+      "sourceNodeId": "ui-back-1",
+      "targetNodeId": "db-pg-main",
+      "type": "SQL",
+      "direction": "bidirectional"
+    },
+    {
+      "id": "c30",
+      "sourceNodeId": "ui-back-1",
+      "targetNodeId": "db-ignite-cache",
+      "type": "SQL",
+      "direction": "bidirectional"
+    },
+    {
+      "id": "c31",
+      "sourceNodeId": "proxy-lb",
+      "targetNodeId": "ui-proxy-1",
+      "type": "HTTP",
+      "direction": "directed"
+    },
+    {
+      "id": "c32",
+      "sourceNodeId": "proxy-lb",
+      "targetNodeId": "get-2",
+      "type": "HTTP",
+      "direction": "directed"
+    }
+  ],
+  "groups": [
+    {
+      "id": "group-gets",
+      "name": "GET Modules",
+      "nodeIds": ["get-1", "get-2"]
+    },
+    {
+      "id": "group-syncers",
+      "name": "Syncer Modules",
+      "nodeIds": ["syncer-1", "syncer-2"]
+    },
+    {
+      "id": "group-rsc-cores",
+      "name": "RSC Core Modules",
+      "nodeIds": ["rsc-write-1", "rsc-read-1", "rsc-monitor-1"]
+    }
+  ]
+}
+```
